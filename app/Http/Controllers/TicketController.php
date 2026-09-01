@@ -19,7 +19,15 @@ class TicketController
             $usuario = auth()->user();
 
             // 2. Preparamos la consulta base (Eager Loading)
-            $query = Ticket::with(['usuarioReporta', 'equipo', 'categoria', 'tecnicoAsignado']);
+            $query = Ticket::with([
+                'usuarioReporta', 
+                'equipo', 
+                'categoria', 
+                'tecnicoAsignado',
+                'historial' => function($q) {
+                    $q->orderBy('date_created', 'desc');
+                }
+            ]);
 
             // 3. REGLA DE NEGOCIO: Si NO es administrador, filtramos solo sus tickets
             if ($usuario->rol !== 'Administrador') {
@@ -135,7 +143,7 @@ class TicketController
     }
 
     /**
-     * PUT/PATCH: Actualiza un ticket (ej. asignarle un técnico o cambiar estatus).
+     * PUT/PATCH: Actualiza un ticket (asignar técnico, estatus o corregir descripción).
      */
     public function update(Request $request, string $id)
     {
@@ -145,11 +153,12 @@ class TicketController
             return response()->json(['success' => false, 'message' => 'Ticket no encontrado'], 404);
         }
 
-        // Quitamos la obligación del comentario, ahora es opcional (nullable)
+        // Validación dinámica: aceptamos estatus/técnicos (Admin) o descripcion_falla (Usuario)
         $request->validate([
             'estatus' => 'sometimes|required|string|in:Abierto,En_Progreso,Esperando_Piezas,Resuelto,Cerrado',
             'tecnico_asignado_id' => 'sometimes|required|integer|exists:usuarios,id',
-            'comentario_cambio' => 'nullable|string'
+            'comentario_cambio' => 'nullable|string',
+            'descripcion_falla' => 'sometimes|required|string'
         ]);
 
         try {
@@ -158,22 +167,31 @@ class TicketController
             $estatusAnterior = $ticket->estatus;
             $cambioEstatus = $request->has('estatus') && $request->estatus !== $estatusAnterior;
 
-            // Actualizar campos del ticket
-            $ticket->update($request->only(['estatus', 'tecnico_asignado_id', 'prioridad']));
-            $ticket->user_edit_id = auth()->id(); // Utilizamos el ID del usuario autenticado
+            // Actualizamos los campos que vengan en la petición
+            $ticket->update($request->only(['estatus', 'tecnico_asignado_id', 'prioridad', 'descripcion_falla']));
+            $ticket->user_edit_id = auth()->id();
             $ticket->save();
 
-            // Si el estatus cambió, guardamos el historial
-            if ($cambioEstatus) {
-                // Magia aquí: Si no envías comentario desde React, Laravel arma uno automático.
-                $comentarioAutomatico = $request->comentario_cambio ?? "El sistema registró un cambio de estatus de '{$estatusAnterior}' a '{$request->estatus}'.";
+            // Si el usuario normal modificó la descripción, dejamos registro en el historial
+            if ($request->has('descripcion_falla') && !$cambioEstatus) {
+                 TicketHistorial::create([
+                    'ticket_id' => $ticket->id,
+                    'estatus_anterior' => $estatusAnterior,
+                    'estatus_nuevo' => $estatusAnterior,
+                    'comentario_cambio' => 'El usuario actualizó la descripción del reporte.',
+                    'user_create_id' => auth()->id() 
+                ]);
+            }
 
+            // Si el admin cambió el estatus, registramos ese cambio
+            if ($cambioEstatus) {
+                $comentarioAutomatico = $request->comentario_cambio ?? "El sistema registró un cambio de estatus de '{$estatusAnterior}' a '{$request->estatus}'.";
                 TicketHistorial::create([
                     'ticket_id' => $ticket->id,
                     'estatus_anterior' => $estatusAnterior,
                     'estatus_nuevo' => $request->estatus,
                     'comentario_cambio' => $comentarioAutomatico,
-                    'user_create_id' => auth()->id() // Utilizamos el ID del usuario autenticado
+                    'user_create_id' => auth()->id() 
                 ]);
             }
 
@@ -182,7 +200,7 @@ class TicketController
             return response()->json([
                 'success' => true,
                 'data' => $ticket,
-                'message' => 'Ticket actualizado con agilidad'
+                'message' => 'Ticket actualizado correctamente'
             ], 200);
 
         } catch (\Exception $e) {

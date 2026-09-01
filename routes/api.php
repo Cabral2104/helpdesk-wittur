@@ -34,7 +34,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('usuarios', UsuarioController::class);
     Route::apiResource('categorias', CategoriaIncidenciaController::class);
     Route::apiResource('equipos', EquipoInventarioController::class);
-    Route::apiResource('camaras', CamaraCctvController::class);
+    Route::apiResource('cctv', CamaraCctvController::class);
     Route::apiResource('tickets', TicketController::class);
     
 });
