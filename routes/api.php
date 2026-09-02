@@ -8,6 +8,7 @@ use App\Http\Controllers\CategoriaIncidenciaController;
 use App\Http\Controllers\EquipoInventarioController;
 use App\Http\Controllers\CamaraCctvController;
 use App\Http\Controllers\TicketController;
+use App\Http\Controllers\DashboardController;
 
 // ==========================================
 // RUTAS PÚBLICAS (No requieren Token)
@@ -36,5 +37,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('equipos', EquipoInventarioController::class);
     Route::apiResource('cctv', CamaraCctvController::class);
     Route::apiResource('tickets', TicketController::class);
+    Route::get('/dashboard/metricas', [\App\Http\Controllers\DashboardController::class, 'index']);
     
 });

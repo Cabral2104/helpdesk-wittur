@@ -12,34 +12,44 @@ class TicketController
     /**
      * GET: Lista todos los tickets con sus relaciones.
      */
-    public function index()
+    public function index(Request $request)
     {
         try {
-            // 1. Identificamos quién está haciendo la petición
             $usuario = auth()->user();
+            
+            // Recibimos parámetros de ordenamiento (por defecto: fecha descendente)
+            $sortBy = $request->query('sort_by', 'date_created');
+            $sortOrder = $request->query('sort_order', 'desc');
+            
+            // Validamos que solo se pueda ordenar por columnas permitidas
+            $allowedSorts = ['id', 'date_created', 'prioridad', 'estatus'];
+            if (!in_array($sortBy, $allowedSorts)) {
+                $sortBy = 'date_created';
+            }
+            $sortOrder = strtolower($sortOrder) === 'asc' ? 'asc' : 'desc';
 
-            // 2. Preparamos la consulta base (Eager Loading)
             $query = Ticket::with([
-                'usuarioReporta', 
-                'equipo', 
-                'categoria', 
-                'tecnicoAsignado',
+                'usuarioReporta', 'equipo', 'categoria', 'tecnicoAsignado',
                 'historial' => function($q) {
                     $q->orderBy('date_created', 'desc');
                 }
             ]);
 
-            // 3. REGLA DE NEGOCIO: Si NO es administrador, filtramos solo sus tickets
             if ($usuario->rol !== 'Administrador') {
                 $query->where('usuario_reporta_id', $usuario->id);
             }
 
-            // 4. Traemos los resultados ordenados por los más recientes
-            $tickets = $query->orderBy('id', 'desc')->get();
+            // Aplicamos el ordenamiento dinámico y la paginación
+            $tickets = $query->orderBy($sortBy, $sortOrder)->paginate(10);
             
             return response()->json([
                 'success' => true,
-                'data' => $tickets
+                'data' => $tickets->items(),
+                'meta' => [
+                    'current_page' => $tickets->currentPage(),
+                    'last_page' => $tickets->lastPage(),
+                    'total' => $tickets->total()
+                ]
             ], 200);
 
         } catch (\Exception $e) {

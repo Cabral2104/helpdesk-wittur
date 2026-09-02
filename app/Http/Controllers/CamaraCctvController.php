@@ -11,10 +11,20 @@ class CamaraCctvController
     /**
      * GET: Obtener todas las cámaras activas
      */
-    public function index()
+    public function index(Request $request)
     {
         try {
-            $camaras = CamaraCctv::orderBy('id', 'desc')->paginate(10);
+            $sortBy = $request->query('sort_by', 'date_created');
+            $sortOrder = $request->query('sort_order', 'desc');
+            
+            $allowedSorts = ['id', 'date_created', 'nombre_camara', 'estatus_red'];
+            if (!in_array($sortBy, $allowedSorts)) {
+                $sortBy = 'date_created';
+            }
+            $sortOrder = strtolower($sortOrder) === 'asc' ? 'asc' : 'desc';
+
+            // Aplicamos ordenamiento dinámico y paginación
+            $camaras = CamaraCctv::orderBy($sortBy, $sortOrder)->paginate(10);
             
             return response()->json([
                 'success' => true,
