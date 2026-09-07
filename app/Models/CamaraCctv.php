@@ -16,6 +16,7 @@ class CamaraCctv extends Model
         'ubicacion',
         'stream_url',
         'estatus_red',
+        'visible_en_caseta',
         'status',
         'user_create_id',
         'user_edit_id'

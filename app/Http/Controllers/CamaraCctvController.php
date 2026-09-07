@@ -47,81 +47,37 @@ class CamaraCctvController
      * POST: Registrar una nueva cámara
      */
     public function store(Request $request)
-    {
-        $request->validate([
-            'nombre_camara' => 'required|string|max:255|unique:camaras_cctv,nombre_camara',
-            'ubicacion' => 'required|string|max:255',
-            'stream_url' => 'nullable|string',
-            'estatus_red' => 'required|integer|in:0,1,2'
+{
+    try {
+        $camara = CamaraCctv::create([
+            'nombre_camara' => $request->nombre_camara,
+            'ubicacion' => $request->ubicacion,
+            'estatus_red' => $request->estatus_red,
+            'stream_url' => $request->stream_url,
+            'visible_en_caseta' => $request->visible_en_caseta ? 1 : 0 // <- LÍNEA CLAVE
         ]);
-
-        try {
-            DB::beginTransaction();
-
-            $camara = CamaraCctv::create([
-                'nombre_camara' => $request->nombre_camara,
-                'ubicacion' => $request->ubicacion,
-                'stream_url' => $request->stream_url ?? 'N/A',
-                'estatus_red' => $request->estatus_red,
-                'user_create_id' => auth()->id()
-            ]);
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'data' => $camara,
-                'message' => 'Cámara registrada exitosamente.'
-            ], 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al registrar la cámara: ' . $e->getMessage()
-            ], 500);
-        }
+        return response()->json(['success' => true, 'data' => $camara], 201);
+    } catch (\Exception $e) {
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
     }
+}
 
-    /**
-     * PUT/PATCH: Actualizar datos o estatus de una cámara
-     */
-    public function update(Request $request, $id)
-    {
-        $camara = CamaraCctv::find($id);
-
-        if (!$camara) {
-            return response()->json(['success' => false, 'message' => 'Cámara no encontrada'], 404);
-        }
-
-        $request->validate([
-            'nombre_camara' => 'sometimes|required|string|max:255|unique:camaras_cctv,nombre_camara,' . $id,
-            'ubicacion' => 'sometimes|required|string|max:255',
-            'stream_url' => 'nullable|string',
-            'estatus_red' => 'sometimes|required|integer|in:0,1,2'
+public function update(Request $request, $id)
+{
+    try {
+        $camara = CamaraCctv::findOrFail($id);
+        $camara->update([
+            'nombre_camara' => $request->nombre_camara,
+            'ubicacion' => $request->ubicacion,
+            'estatus_red' => $request->estatus_red,
+            'stream_url' => $request->stream_url,
+            'visible_en_caseta' => $request->visible_en_caseta ? 1 : 0 // <- LÍNEA CLAVE
         ]);
-
-        try {
-            $datosActualizar = $request->only(['nombre_camara', 'ubicacion', 'estatus_red']);
-            $datosActualizar['stream_url'] = $request->stream_url ?? 'N/A';
-
-            $camara->update($datosActualizar);
-            $camara->user_edit_id = auth()->id();
-            $camara->save();
-
-            return response()->json([
-                'success' => true,
-                'data' => $camara,
-                'message' => 'Cámara actualizada correctamente.'
-            ], 200);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al actualizar la cámara: ' . $e->getMessage()
-            ], 500);
-        }
+        return response()->json(['success' => true, 'data' => $camara], 200);
+    } catch (\Exception $e) {
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
     }
+}
 
     /**
      * DELETE: Borrado lógico de la cámara
@@ -148,6 +104,27 @@ class CamaraCctvController
             return response()->json([
                 'success' => false,
                 'message' => 'Error al dar de baja la cámara: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * GET: Obtener SOLO las cámaras permitidas para visualización en caseta
+     */
+    public function camarasCaseta()
+    {
+        try {
+            // Solo trae las que tienen visible_en_caseta = 1 y están activas (status = 1)
+            $camaras = CamaraCctv::where('visible_en_caseta', 1)->orderBy('nombre_camara', 'asc')->get();
+            
+            return response()->json([
+                'success' => true,
+                'data' => $camaras
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener cámaras de caseta: ' . $e->getMessage()
             ], 500);
         }
     }

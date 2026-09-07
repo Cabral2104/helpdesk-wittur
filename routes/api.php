@@ -9,6 +9,7 @@ use App\Http\Controllers\EquipoInventarioController;
 use App\Http\Controllers\CamaraCctvController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ReporteSeguridadController;
 
 // ==========================================
 // RUTAS PÚBLICAS (No requieren Token)
@@ -30,13 +31,17 @@ Route::middleware('auth:sanctum')->group(function () {
     // Ruta para cerrar sesión
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    // Todos tus módulos (Ahora protegidos y con auth()->id() funcional)
+    // --- 1. RUTAS ESPECÍFICAS (Deben ir primero) ---
+    Route::get('/dashboard/metricas', [DashboardController::class, 'index']);
+    Route::get('/cctv/caseta', [CamaraCctvController::class, 'camarasCaseta']); // <- ¡Movida arriba!
+
+    // --- 2. RUTAS DE RECURSOS (Dinámicas, deben ir después) ---
     Route::apiResource('departamentos', DepartamentoController::class);
     Route::apiResource('usuarios', UsuarioController::class);
     Route::apiResource('categorias', CategoriaIncidenciaController::class);
     Route::apiResource('equipos', EquipoInventarioController::class);
     Route::apiResource('cctv', CamaraCctvController::class);
     Route::apiResource('tickets', TicketController::class);
-    Route::get('/dashboard/metricas', [\App\Http\Controllers\DashboardController::class, 'index']);
+    Route::apiResource('reportes-seguridad', ReporteSeguridadController::class)->except(['create', 'edit', 'destroy']);
     
 });
