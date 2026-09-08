@@ -43,5 +43,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('cctv', CamaraCctvController::class);
     Route::apiResource('tickets', TicketController::class);
     Route::apiResource('reportes-seguridad', ReporteSeguridadController::class)->except(['create', 'edit', 'destroy']);
+    Route::get('/categorias-incidencias', [TicketController::class, 'getCategorias']);
     
 });

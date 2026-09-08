@@ -27,6 +27,6 @@ class ReporteSeguridad extends Model
 
     public function guardia()
     {
-        return $this->belongsTo(User::class, 'usuario_reporta_id');
+        return $this->belongsTo(Usuario::class, 'usuario_reporta_id');
     }
 }

@@ -70,7 +70,7 @@ class TicketController
             'titulo' => 'required|string|max:255', // El asunto breve del frontend
             'descripcion' => 'required|string',     // La descripción del frontend
             'prioridad' => 'required|string|in:Baja,Media,Alta,Crítica',
-            'categoria_incidencia_id' => 'required|integer|exists:categorias_incidencias,id',
+            'categoria_id' => 'required|integer|exists:categorias_incidencias,id', // <-- CORREGIDO AQUÍ
             'equipo_id' => 'nullable|integer|exists:equipos_inventario,id' // Opcional por ahora
         ]);
 
@@ -85,7 +85,7 @@ class TicketController
                 'folio' => $folioGenerado,
                 'usuario_reporta_id' => auth()->id(), // Tomamos el ID del token Sanctum de forma segura
                 'equipo_id' => $request->equipo_id ?? null,
-                'categoria_id' => $request->categoria_incidencia_id,
+                'categoria_id' => $request->categoria_id, // <-- CORREGIDO AQUÍ
                 'prioridad' => $request->prioridad,
                 'estatus' => 'Abierto', 
                 // Unimos el título y descripción del frontend para guardarlo en tu columna de BD
@@ -249,6 +249,24 @@ class TicketController
                 'success' => false,
                 'message' => 'Error al eliminar el ticket: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    public function getCategorias()
+    {
+        try {
+            // Utilizamos DB facade si no tienes el modelo creado, o puedes usar el modelo CategoriaIncidencia
+            $categorias = \Illuminate\Support\Facades\DB::table('categorias_incidencias')
+                ->where('status', 1)
+                ->select('id', 'nombre')
+                ->get();
+                
+            return response()->json([
+                'success' => true,
+                'data' => $categorias
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 }
