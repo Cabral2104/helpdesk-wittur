@@ -81,15 +81,61 @@ class ReporteSeguridadController
             return response()->json(['success' => false, 'message' => 'Reporte no encontrado'], 404);
         }
 
-        $request->validate([
-            'estatus' => 'required|string|in:Pendiente,En_Revision,Resuelto'
-        ]);
-
         try {
-            $reporte->update(['estatus' => $request->estatus]);
-            return response()->json(['success' => true, 'data' => $reporte, 'message' => 'Estatus actualizado.'], 200);
+            // Si mandan estatus (solo lo hará el Admin desde el frontend)
+            if ($request->has('estatus')) {
+                $reporte->estatus = $request->estatus;
+            }
+
+            // Si mandan edición de textos (lo hará el Guardia o Admin desde el modal)
+            if ($request->has('tipo_incidente')) {
+                $reporte->tipo_incidente = $request->tipo_incidente;
+            }
+            if ($request->has('descripcion')) {
+                $reporte->descripcion = $request->descripcion;
+            }
+
+            // Si tienes campo de auditoría para saber quién editó, descomenta la siguiente línea:
+            // $reporte->user_edit_id = auth()->id();
+
+            $reporte->save();
+
+            return response()->json(['success' => true, 'data' => $reporte, 'message' => 'Reporte actualizado.'], 200);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Error al actualizar: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * DELETE: Borrado lógico del reporte (Soft Delete)
+     */
+    public function destroy($id)
+    {
+        try {
+            $reporte = ReporteSeguridad::find($id);
+
+            if (!$reporte) {
+                return response()->json(['success' => false, 'message' => 'Reporte no encontrado'], 404);
+            }
+
+            // Realizamos el borrado lógico cambiando el status a 0
+            $reporte->status = 0; 
+            
+            // Si tienes campo de auditoría para saber quién lo borró, descomenta:
+            // $reporte->user_edit_id = auth()->id();
+            
+            $reporte->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Reporte eliminado de la bitácora correctamente.'
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar el reporte: ' . $e->getMessage()
+            ], 500);
         }
     }
 }
