@@ -14,8 +14,13 @@ class CamaraCctv extends Model
     protected $fillable = [
         'nombre_camara',
         'ubicacion',
+        'numero_serie',
         'stream_url',
+        'ip_asignada',
+        'switch_conexion',
+        'puerto_switch',
         'estatus_red',
+        'visible_en_caseta',
         'status',
         'user_create_id',
         'user_edit_id'

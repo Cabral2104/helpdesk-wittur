@@ -3,28 +3,42 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\Usuario;
+use App\Models\Usuario; // IMPORTANTE: Sin esto, Laravel marca error 500
 
 class UsuarioController
 {
-    public function index()
+    public function index(Request $request)
     {
         try {
-            // Traemos a los usuarios con la información de su departamento
-            $usuarios = Usuario::with('departamento')->get();
-            return response()->json(['success' => true, 'data' => $usuarios], 200);
+            $sortBy = $request->query('sort_by', 'date_created');
+            $sortOrder = $request->query('sort_order', 'desc');
+            
+            // Ya tienes el GlobalScope en el modelo, pero por seguridad lo dejamos
+            $usuarios = Usuario::where('status', 1)
+                               ->orderBy($sortBy, $sortOrder)
+                               ->paginate(10);
+            
+            return response()->json([
+                'success' => true,
+                'data' => $usuarios->items(),
+                'meta' => [
+                    'current_page' => $usuarios->currentPage(),
+                    'last_page' => $usuarios->lastPage(),
+                    'total' => $usuarios->total()
+                ]
+            ], 200);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'numero_nomina' => 'required|string|unique:usuarios,numero_nomina|max:50',
-            'nombre_completo' => 'required|string|max:150',
-            'departamento_id' => 'required|integer|exists:departamentos,id',
-            'rol' => 'required|in:Operador,Tecnico_ICT,Administrador'
+            'numero_nomina' => 'required|string',
+            'nombre_completo' => 'required|string',
+            'departamento_id' => 'required|integer',
+            'rol' => 'required|string'
         ]);
 
         try {
@@ -33,55 +47,53 @@ class UsuarioController
                 'nombre_completo' => $request->nombre_completo,
                 'departamento_id' => $request->departamento_id,
                 'rol' => $request->rol,
-                'user_create_id' => auth()->id() // Asigna al administrador que lo está creando
+                'status' => 1,
+                'user_create_id' => auth()->id() ?? 1
             ]);
-
-            return response()->json(['success' => true, 'data' => $usuario, 'message' => 'Usuario registrado'], 201);
+            return response()->json(['success' => true, 'data' => $usuario], 201);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
-    public function show(string $id)
+    public function update(Request $request, $id)
     {
-        $usuario = Usuario::with('departamento')->find($id);
-        if (!$usuario) return response()->json(['success' => false, 'message' => 'Usuario no encontrado'], 404);
-        
-        return response()->json(['success' => true, 'data' => $usuario], 200);
-    }
-
-    public function update(Request $request, string $id)
-    {
-        $usuario = Usuario::find($id);
-        if (!$usuario) return response()->json(['success' => false, 'message' => 'Usuario no encontrado'], 404);
-
         $request->validate([
-            'numero_nomina' => 'sometimes|required|string|max:50|unique:usuarios,numero_nomina,' . $id,
-            'nombre_completo' => 'sometimes|required|string|max:150',
-            'departamento_id' => 'sometimes|required|integer|exists:departamentos,id',
-            'rol' => 'sometimes|required|in:Operador,Tecnico_ICT,Administrador'
+            'numero_nomina' => 'required|string',
+            'nombre_completo' => 'required|string',
+            'departamento_id' => 'required|integer',
+            'rol' => 'required|string'
         ]);
 
         try {
-            $usuario->update($request->all());
-            $usuario->user_edit_id = auth()->id(); // Registra quién editó
-            $usuario->save();
+            $usuario = Usuario::find($id);
+            if(!$usuario) {
+                return response()->json(['success' => false, 'message' => 'Usuario no encontrado'], 404);
+            }
 
-            return response()->json(['success' => true, 'data' => $usuario, 'message' => 'Usuario actualizado'], 200);
+            $usuario->update([
+                'numero_nomina' => $request->numero_nomina,
+                'nombre_completo' => $request->nombre_completo,
+                'departamento_id' => $request->departamento_id,
+                'rol' => $request->rol
+            ]);
+            return response()->json(['success' => true, 'data' => $usuario], 200);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
-    public function destroy(string $id)
+    public function destroy($id)
     {
-        $usuario = Usuario::find($id);
-        if (!$usuario) return response()->json(['success' => false, 'message' => 'No encontrado'], 404);
-
-        $usuario->status = 0;
-        $usuario->user_edit_id = auth()->id(); // Registra quién lo dio de baja
-        $usuario->save();
-
-        return response()->json(['success' => true, 'message' => 'Usuario dado de baja'], 200);
+        try {
+            $usuario = Usuario::find($id);
+            if ($usuario) {
+                $usuario->status = 0; // Borrado lógico
+                $usuario->save();
+            }
+            return response()->json(['success' => true, 'message' => 'Usuario dado de baja'], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
     }
 }

@@ -4,169 +4,152 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\EquipoInventario;
+use App\Models\BitacoraMantenimiento;
+use Illuminate\Support\Facades\DB;
 
 class EquipoInventarioController
 {
-    /**
-     * GET: Lista todo el inventario. Permite filtrar por tipo de dispositivo.
-     */
+    // Obtener todos los equipos activos
     public function index(Request $request)
     {
         try {
-            // Inicializamos la consultas
-            $query = EquipoInventario::query();
-
-            // Filtrado dinámico: Si React envía la variable 'tipo', filtramos la lista.
-            // Ejemplo de petición: /api/equipos?tipo=Switch
-            if ($request->has('tipo')) {
-                $query->where('tipo_dispositivo', $request->tipo);
-            }
-
-            $equipos = $query->get();
-
+            // Paginamos de 10 en 10 (puedes ajustar el número)
+            $equipos = EquipoInventario::orderBy('id', 'desc')->paginate(10);
+            
             return response()->json([
                 'success' => true,
-                'data' => $equipos,
-                'message' => 'Inventario recuperado exitosamente'
+                'data' => $equipos->items(),
+                'meta' => [
+                    'current_page' => $equipos->currentPage(),
+                    'last_page' => $equipos->lastPage(),
+                    'total' => $equipos->total()
+                ]
             ], 200);
-
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al recuperar el inventario: ' . $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
-    /**
-     * POST: Registra un nuevo equipo (Laptop, Monitor, Impresora, etc.)
-     */
+    // Crear un nuevo equipo
     public function store(Request $request)
     {
-        // 1. Validación flexible adaptada a todo tipo de hardware
         $request->validate([
-            'codigo_qr' => 'required|string|unique:equipos_inventario,codigo_qr|max:100',
-            'tipo_dispositivo' => 'required|string|max:100', // Ej: Monitor, Switch, Workstation
-            'marca_modelo' => 'required|string|max:150',     // Ej: Zebra ZT410, Dell Precision
-            'ubicacion' => 'required|string|max:150',
-            // El campo IP es opcional (nullable), ya que no todo el hardware está en red
-            'ip_address' => 'nullable|ip' 
+            'tipo_dispositivo' => 'required|string',
+            'es_critico' => 'required|boolean',
+            'marca_modelo' => 'nullable|string',
+            'usuario_asignado' => 'nullable|string',
+            'etiqueta' => 'nullable|string',
+            'prod_id' => 'nullable|string',
+            'numero_serie' => 'nullable|string',
+            'nombre_red' => 'nullable|string',
+            'sistema_operativo' => 'nullable|string',
+            'os_build' => 'nullable|string'
         ]);
 
         try {
-            $equipo = EquipoInventario::create([
-                'codigo_qr' => $request->codigo_qr,
-                'tipo_dispositivo' => $request->tipo_dispositivo,
-                'marca_modelo' => $request->marca_modelo,
-                'ubicacion' => $request->ubicacion,
-                'ip_address' => $request->ip_address, // Puede llegar como null y la BD lo aceptará
+            $data = $request->all();
+            $data['user_create_id'] = auth()->id();
+            
+            // 1. Auto-generamos un código QR único
+            $data['codigo_qr'] = 'EQP-' . date('Ymd') . '-' . rand(1000, 9999);
+            
+            // 2. PARCHE DE SEGURIDAD: Llenamos los campos originales obligatorios 
+            // mapeándolos con los nuevos datos del formulario para que MySQL no rechace el insert
+            $data['ubicacion'] = $request->usuario_asignado ?? 'N/A';
+            $data['ip_address'] = $request->nombre_red ?? 'N/A';
+            
+            $equipo = EquipoInventario::create($data);
+
+            return response()->json([
+                'success' => true, 
+                'data' => $equipo, 
+                'message' => 'Equipo registrado correctamente'
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    // Actualizar un equipo existente
+    public function update(Request $request, $id)
+    {
+        $equipo = EquipoInventario::find($id);
+        if (!$equipo) return response()->json(['success' => false, 'message' => 'Equipo no encontrado'], 404);
+
+        try {
+            $data = $request->all();
+            $data['user_edit_id'] = auth()->id();
+            
+            $equipo->update($data);
+            
+            return response()->json(['success' => true, 'data' => $equipo], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    // Borrado lógico (cambiar status a 0)
+    public function destroy($id)
+    {
+        $equipo = EquipoInventario::find($id);
+        if (!$equipo) return response()->json(['success' => false, 'message' => 'Equipo no encontrado'], 404);
+        
+        try {
+            $equipo->status = 0;
+            $equipo->user_edit_id = auth()->id();
+            $equipo->save();
+            
+            return response()->json(['success' => true, 'message' => 'Equipo eliminado'], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    // ----------------------------------------------------
+    // MÉTODOS PARA LA BITÁCORA DE MANTENIMIENTO
+    // ----------------------------------------------------
+
+    public function getBitacora($id)
+    {
+        try {
+            // Buscamos los mantenimientos de un equipo en específico
+            $bitacoras = BitacoraMantenimiento::where('equipo_id', $id)
+                            ->where('status', 1)
+                            ->orderBy('fecha_servicio', 'desc')
+                            ->get();
+                            
+            return response()->json(['success' => true, 'data' => $bitacoras], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function storeBitacora(Request $request, $id)
+    {
+        $request->validate([
+            'tipo_servicio' => 'required|string',
+            'tecnico_asignado' => 'required|string',
+            'fecha_servicio' => 'required|date',
+            'trabajo_realizado' => 'required|string'
+        ]);
+
+        try {
+            $bitacora = BitacoraMantenimiento::create([
+                'equipo_id' => $id,
+                'tipo_servicio' => $request->tipo_servicio,
+                'tecnico_asignado' => $request->tecnico_asignado,
+                'fecha_servicio' => $request->fecha_servicio,
+                'trabajo_realizado' => $request->trabajo_realizado,
                 'user_create_id' => auth()->id()
             ]);
 
             return response()->json([
-                'success' => true,
-                'data' => $equipo,
-                'message' => 'Equipo registrado correctamente en el inventario'
+                'success' => true, 
+                'data' => $bitacora, 
+                'message' => 'Servicio registrado correctamente'
             ], 201);
-
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Hubo un problema al registrar el equipo: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * GET: Muestra el detalle de un equipo en particular.
-     */
-    public function show(string $id)
-    {
-        try {
-            $equipo = EquipoInventario::find($id);
-
-            if (!$equipo) {
-                return response()->json(['success' => false, 'message' => 'Equipo no encontrado'], 404);
-            }
-
-            return response()->json([
-                'success' => true,
-                'data' => $equipo
-            ], 200);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al obtener el equipo: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * PUT/PATCH: Actualiza datos del equipo (ej. cambio de ubicación o asignación de IP).
-     */
-    public function update(Request $request, string $id)
-    {
-        $equipo = EquipoInventario::find($id);
-
-        if (!$equipo) {
-            return response()->json(['success' => false, 'message' => 'Equipo no encontrado'], 404);
-        }
-
-        // Al actualizar, el código QR puede quedarse igual, por lo que ignoramos el ID actual en la regla unique
-        $request->validate([
-            'codigo_qr' => 'sometimes|required|string|max:100|unique:equipos_inventario,codigo_qr,' . $id,
-            'tipo_dispositivo' => 'sometimes|required|string|max:100',
-            'marca_modelo' => 'sometimes|required|string|max:150',
-            'ubicacion' => 'sometimes|required|string|max:150',
-            'ip_address' => 'nullable|ip'
-        ]);
-
-        try {
-            $equipo->update($request->all());
-            $equipo->user_edit_id = auth()->id(); 
-            $equipo->save();
-
-            return response()->json([
-                'success' => true,
-                'data' => $equipo,
-                'message' => 'Datos del equipo actualizados'
-            ], 200);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al actualizar el equipo: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * DELETE: Da de baja un equipo del inventario (Borrado lógico).
-     */
-    public function destroy(string $id)
-    {
-        try {
-            $equipo = EquipoInventario::find($id);
-
-            if (!$equipo) {
-                return response()->json(['success' => false, 'message' => 'Equipo no encontrado'], 404);
-            }
-
-            $equipo->status = 0; // Baja lógica
-            $equipo->user_edit_id = auth()->id(); // Registra quién lo dio de baja
-            $equipo->save();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Equipo dado de baja exitosamente'
-            ], 200);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al dar de baja el equipo: ' . $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 }
