@@ -38,7 +38,7 @@ class UsuarioController
             'numero_nomina' => 'required|string',
             'nombre_completo' => 'required|string',
             'departamento_id' => 'required|integer',
-            'rol' => 'required|string'
+            'rol' => 'required|string',
         ]);
 
         try {
@@ -62,7 +62,7 @@ class UsuarioController
             'numero_nomina' => 'required|string',
             'nombre_completo' => 'required|string',
             'departamento_id' => 'required|integer',
-            'rol' => 'required|string'
+            'rol' => 'required|string',
         ]);
 
         try {
@@ -75,7 +75,7 @@ class UsuarioController
                 'numero_nomina' => $request->numero_nomina,
                 'nombre_completo' => $request->nombre_completo,
                 'departamento_id' => $request->departamento_id,
-                'rol' => $request->rol
+                'rol' => $request->rol,
             ]);
             return response()->json(['success' => true, 'data' => $usuario], 200);
         } catch (\Exception $e) {
