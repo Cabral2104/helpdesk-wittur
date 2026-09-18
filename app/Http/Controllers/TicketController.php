@@ -67,11 +67,11 @@ class TicketController
     {
         // 1. Adaptamos la validación a lo que manda React
         $request->validate([
-            'titulo' => 'required|string|max:255', // El asunto breve del frontend
-            'descripcion' => 'required|string',     // La descripción del frontend
+            'titulo' => 'required|string|max:255', 
+            'descripcion' => 'required|string',    
             'prioridad' => 'required|string|in:Baja,Media,Alta,Crítica',
-            'categoria_id' => 'required|integer|exists:categorias_incidencias,id', // <-- CORREGIDO AQUÍ
-            'equipo_id' => 'nullable|integer|exists:equipos_inventario,id' // Opcional por ahora
+            'categoria_id' => 'required|integer|exists:categorias_incidencias,id', 
+            'equipo_id' => 'nullable|integer|exists:equipos_inventario,id' 
         ]);
 
         try {
@@ -83,9 +83,9 @@ class TicketController
             // 3. Crear el Ticket
             $ticket = Ticket::create([
                 'folio' => $folioGenerado,
-                'usuario_reporta_id' => auth()->id(), // Tomamos el ID del token Sanctum de forma segura
+                'usuario_reporta_id' => auth()->id(), 
                 'equipo_id' => $request->equipo_id ?? null,
-                'categoria_id' => $request->categoria_id, // <-- CORREGIDO AQUÍ
+                'categoria_id' => $request->categoria_id, 
                 'prioridad' => $request->prioridad,
                 'estatus' => 'Abierto', 
                 // Unimos el título y descripción del frontend para guardarlo en tu columna de BD

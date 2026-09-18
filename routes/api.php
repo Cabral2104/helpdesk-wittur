@@ -10,6 +10,7 @@ use App\Http\Controllers\CamaraCctvController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ReporteSeguridadController;
+use App\Http\Controllers\ReporteController;
 
 // ==========================================
 // RUTAS PÚBLICAS (No requieren Token)
@@ -46,5 +47,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('tickets', TicketController::class);
     Route::apiResource('reportes-seguridad', ReporteSeguridadController::class)->except(['create', 'edit', 'destroy']);
     Route::get('/categorias-incidencias', [TicketController::class, 'getCategorias']);
-    
+    Route::get('/exportar', [ReporteController::class, 'exportar']);
 });
