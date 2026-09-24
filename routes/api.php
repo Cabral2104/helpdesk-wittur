@@ -45,7 +45,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('equipos/{id}/bitacora', [EquipoInventarioController::class, 'storeBitacora']);
     Route::apiResource('cctv', CamaraCctvController::class);
     Route::apiResource('tickets', TicketController::class);
-    Route::apiResource('reportes-seguridad', ReporteSeguridadController::class)->except(['create', 'edit', 'destroy']);
+    Route::apiResource('reportes-seguridad', ReporteSeguridadController::class);
     Route::get('/categorias-incidencias', [TicketController::class, 'getCategorias']);
     Route::get('/exportar', [ReporteController::class, 'exportar']);
+    Route::delete('/reportes-seguridad/{id}', [ReporteSeguridadController::class, 'destroy']);
 });

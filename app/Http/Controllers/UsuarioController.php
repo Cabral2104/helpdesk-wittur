@@ -12,11 +12,22 @@ class UsuarioController
         try {
             $sortBy = $request->query('sort_by', 'date_created');
             $sortOrder = $request->query('sort_order', 'desc');
+            $search = $request->query('search', ''); // Recibimos el parámetro de búsqueda
             
-            // Ya tienes el GlobalScope en el modelo, pero por seguridad lo dejamos
-            $usuarios = Usuario::where('status', 1)
-                               ->orderBy($sortBy, $sortOrder)
-                               ->paginate(10);
+            // Base de la consulta
+            $query = Usuario::where('status', 1);
+
+            // Si hay texto de búsqueda, buscamos en todos los registros
+            if (!empty($search)) {
+                $query->where(function($q) use ($search) {
+                    $q->where('nombre_completo', 'LIKE', "%{$search}%")
+                      ->orWhere('numero_nomina', 'LIKE', "%{$search}%")
+                      ->orWhere('rol', 'LIKE', "%{$search}%");
+                });
+            }
+
+            // Aplicamos orden y paginación
+            $usuarios = $query->orderBy($sortBy, $sortOrder)->paginate(10);
             
             return response()->json([
                 'success' => true,

@@ -10,18 +10,18 @@ use App\Models\TicketHistorial;
 class TicketController
 {
     /**
-     * GET: Lista todos los tickets con sus relaciones.
+     * GET: Lista todos los tickets con sus relaciones (Paginación y Búsqueda).
      */
     public function index(Request $request)
     {
         try {
             $usuario = auth()->user();
             
-            // Recibimos parámetros de ordenamiento (por defecto: fecha descendente)
             $sortBy = $request->query('sort_by', 'date_created');
             $sortOrder = $request->query('sort_order', 'desc');
+            $search = $request->query('search', '');
+            $categoriaId = $request->query('categoria_id', '');
             
-            // Validamos que solo se pueda ordenar por columnas permitidas
             $allowedSorts = ['id', 'date_created', 'prioridad', 'estatus'];
             if (!in_array($sortBy, $allowedSorts)) {
                 $sortBy = 'date_created';
@@ -35,8 +35,22 @@ class TicketController
                 }
             ]);
 
+            // Filtrar por usuario si no es Administrador
             if ($usuario->rol !== 'Administrador') {
                 $query->where('usuario_reporta_id', $usuario->id);
+            }
+
+            // Aplicar búsqueda por texto (ID o Descripción)
+            if (!empty($search)) {
+                $query->where(function($q) use ($search) {
+                    $q->where('id', 'LIKE', "%{$search}%")
+                      ->orWhere('descripcion_falla', 'LIKE', "%{$search}%");
+                });
+            }
+
+            // Aplicar filtro por categoría
+            if (!empty($categoriaId)) {
+                $query->where('categoria_id', $categoriaId);
             }
 
             // Aplicamos el ordenamiento dinámico y la paginación
@@ -65,7 +79,6 @@ class TicketController
      */
     public function store(Request $request)
     {
-        // 1. Adaptamos la validación a lo que manda React
         $request->validate([
             'titulo' => 'required|string|max:255', 
             'descripcion' => 'required|string',    
@@ -77,10 +90,8 @@ class TicketController
         try {
             DB::beginTransaction();
 
-            // 2. Auto-generamos un Folio único (Ej. TKT-20260828-1543)
             $folioGenerado = 'TKT-' . date('Ymd-Hi') . '-' . rand(10, 99);
 
-            // 3. Crear el Ticket
             $ticket = Ticket::create([
                 'folio' => $folioGenerado,
                 'usuario_reporta_id' => auth()->id(), 
@@ -88,12 +99,10 @@ class TicketController
                 'categoria_id' => $request->categoria_id, 
                 'prioridad' => $request->prioridad,
                 'estatus' => 'Abierto', 
-                // Unimos el título y descripción del frontend para guardarlo en tu columna de BD
                 'descripcion_falla' => $request->titulo . " - " . $request->descripcion,
                 'user_create_id' => auth()->id() 
             ]);
 
-            // 4. Registrar automáticamente el evento en el Historial
             TicketHistorial::create([
                 'ticket_id' => $ticket->id,
                 'estatus_anterior' => 'Abierto',
@@ -125,7 +134,6 @@ class TicketController
     public function show(string $id)
     {
         try {
-            // Buscamos el ticket por ID e incluimos su historial ordenado
             $ticket = Ticket::with(['usuarioReporta', 'equipo', 'categoria', 'tecnicoAsignado'])
                             ->with(['historial' => function($query) {
                                 $query->orderBy('date_created', 'desc');
@@ -153,7 +161,7 @@ class TicketController
     }
 
     /**
-     * PUT/PATCH: Actualiza un ticket (asignar técnico, estatus o corregir descripción).
+     * PUT/PATCH: Actualiza un ticket.
      */
     public function update(Request $request, string $id)
     {
@@ -163,7 +171,6 @@ class TicketController
             return response()->json(['success' => false, 'message' => 'Ticket no encontrado'], 404);
         }
 
-        // Validación dinámica: aceptamos estatus/técnicos (Admin) o descripcion_falla (Usuario)
         $request->validate([
             'estatus' => 'sometimes|required|string|in:Abierto,En_Progreso,Esperando_Piezas,Resuelto,Cerrado',
             'tecnico_asignado_id' => 'sometimes|required|integer|exists:usuarios,id',
@@ -177,12 +184,10 @@ class TicketController
             $estatusAnterior = $ticket->estatus;
             $cambioEstatus = $request->has('estatus') && $request->estatus !== $estatusAnterior;
 
-            // Actualizamos los campos que vengan en la petición
             $ticket->update($request->only(['estatus', 'tecnico_asignado_id', 'prioridad', 'descripcion_falla']));
             $ticket->user_edit_id = auth()->id();
             $ticket->save();
 
-            // Si el usuario normal modificó la descripción, dejamos registro en el historial
             if ($request->has('descripcion_falla') && !$cambioEstatus) {
                  TicketHistorial::create([
                     'ticket_id' => $ticket->id,
@@ -193,7 +198,6 @@ class TicketController
                 ]);
             }
 
-            // Si el admin cambió el estatus, registramos ese cambio
             if ($cambioEstatus) {
                 $comentarioAutomatico = $request->comentario_cambio ?? "El sistema registró un cambio de estatus de '{$estatusAnterior}' a '{$request->estatus}'.";
                 TicketHistorial::create([
@@ -234,9 +238,8 @@ class TicketController
                 return response()->json(['success' => false, 'message' => 'Ticket no encontrado'], 404);
             }
 
-            // Aplicamos el borrado lógico que definimos en el Modelo
             $ticket->status = 0; 
-            $ticket->user_edit_id = auth()->id(); // Utilizamos el ID del usuario autenticado
+            $ticket->user_edit_id = auth()->id(); 
             $ticket->save();
 
             return response()->json([
@@ -255,7 +258,6 @@ class TicketController
     public function getCategorias()
     {
         try {
-            // Utilizamos DB facade si no tienes el modelo creado, o puedes usar el modelo CategoriaIncidencia
             $categorias = \Illuminate\Support\Facades\DB::table('categorias_incidencias')
                 ->where('status', 1)
                 ->select('id', 'nombre')
