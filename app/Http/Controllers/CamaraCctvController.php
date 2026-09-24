@@ -9,13 +9,14 @@ use Illuminate\Support\Facades\DB;
 class CamaraCctvController
 {
     /**
-     * GET: Obtener todas las cámaras activas
+     * GET: Obtener todas las cámaras activas (con búsqueda y ordenamiento)
      */
     public function index(Request $request)
     {
         try {
             $sortBy = $request->query('sort_by', 'date_created');
             $sortOrder = $request->query('sort_order', 'desc');
+            $search = $request->query('search', '');
             
             $allowedSorts = ['id', 'date_created', 'nombre_camara', 'estatus_red'];
             if (!in_array($sortBy, $allowedSorts)) {
@@ -23,8 +24,20 @@ class CamaraCctvController
             }
             $sortOrder = strtolower($sortOrder) === 'asc' ? 'asc' : 'desc';
 
-            // Aplicamos ordenamiento dinámico y paginación
-            $camaras = CamaraCctv::orderBy($sortBy, $sortOrder)->paginate(10);
+            // Base de la consulta: Solo cámaras activas
+            $query = CamaraCctv::where('status', 1);
+
+            // Búsqueda en múltiples columnas si hay texto
+            if (!empty($search)) {
+                $query->where(function($q) use ($search) {
+                    $q->where('nombre_camara', 'LIKE', "%{$search}%")
+                      ->orWhere('ubicacion', 'LIKE', "%{$search}%")
+                      ->orWhere('ip_asignada', 'LIKE', "%{$search}%")
+                      ->orWhere('numero_serie', 'LIKE', "%{$search}%");
+                });
+            }
+
+            $camaras = $query->orderBy($sortBy, $sortOrder)->paginate(10);
             
             return response()->json([
                 'success' => true,
@@ -48,6 +61,19 @@ class CamaraCctvController
      */
     public function store(Request $request)
     {
+        // Validación básica de seguridad
+        $request->validate([
+            'nombre_camara' => 'required|string|max:255',
+            'ubicacion' => 'required|string|max:255',
+            'numero_serie' => 'nullable|string|max:255',
+            'ip_asignada' => 'nullable|string|max:50',
+            'switch_conexion' => 'nullable|string|max:255',
+            'puerto_switch' => 'nullable|string|max:50',
+            'stream_url' => 'nullable|string|max:500',
+            'estatus_red' => 'required|integer',
+            'visible_en_caseta' => 'required|boolean'
+        ]);
+
         try {
             $camara = CamaraCctv::create([
                 'nombre_camara' => $request->nombre_camara,
@@ -58,7 +84,8 @@ class CamaraCctvController
                 'visible_en_caseta' => $request->visible_en_caseta ? 1 : 0,
                 'ip_asignada' => $request->ip_asignada,
                 'switch_conexion' => $request->switch_conexion,
-                'puerto_switch' => $request->puerto_switch
+                'puerto_switch' => $request->puerto_switch,
+                'status' => 1 // Asegurar que nace activa
             ]);
             return response()->json(['success' => true, 'data' => $camara], 201);
         } catch (\Exception $e) {
@@ -71,6 +98,18 @@ class CamaraCctvController
      */
     public function update(Request $request, $id)
     {
+        $request->validate([
+            'nombre_camara' => 'required|string|max:255',
+            'ubicacion' => 'required|string|max:255',
+            'numero_serie' => 'nullable|string|max:255',
+            'ip_asignada' => 'nullable|string|max:50',
+            'switch_conexion' => 'nullable|string|max:255',
+            'puerto_switch' => 'nullable|string|max:50',
+            'stream_url' => 'nullable|string|max:500',
+            'estatus_red' => 'required|integer',
+            'visible_en_caseta' => 'required|boolean'
+        ]);
+
         try {
             $camara = CamaraCctv::findOrFail($id);
             $camara->update([
@@ -126,7 +165,10 @@ class CamaraCctvController
     {
         try {
             // Solo trae las que tienen visible_en_caseta = 1 y están activas (status = 1)
-            $camaras = CamaraCctv::where('visible_en_caseta', 1)->orderBy('nombre_camara', 'asc')->get();
+            $camaras = CamaraCctv::where('visible_en_caseta', 1)
+                                 ->where('status', 1)
+                                 ->orderBy('nombre_camara', 'asc')
+                                 ->get();
             
             return response()->json([
                 'success' => true,

@@ -9,12 +9,28 @@ use Illuminate\Support\Facades\DB;
 
 class EquipoInventarioController
 {
-    // Obtener todos los equipos activos
+    // Obtener todos los equipos activos con búsqueda
     public function index(Request $request)
     {
         try {
-            // Paginamos de 10 en 10 (puedes ajustar el número)
-            $equipos = EquipoInventario::orderBy('id', 'desc')->paginate(10);
+            $search = $request->query('search', '');
+            
+            // Iniciar consulta base
+            $query = EquipoInventario::where('status', 1);
+
+            // Aplicar búsqueda global en varias columnas
+            if (!empty($search)) {
+                $query->where(function($q) use ($search) {
+                    $q->where('usuario_asignado', 'LIKE', "%{$search}%")
+                      ->orWhere('etiqueta', 'LIKE', "%{$search}%")
+                      ->orWhere('numero_serie', 'LIKE', "%{$search}%")
+                      ->orWhere('nombre_red', 'LIKE', "%{$search}%")
+                      ->orWhere('marca_modelo', 'LIKE', "%{$search}%");
+                });
+            }
+
+            // Paginamos de 10 en 10
+            $equipos = $query->orderBy('id', 'desc')->paginate(10);
             
             return response()->json([
                 'success' => true,

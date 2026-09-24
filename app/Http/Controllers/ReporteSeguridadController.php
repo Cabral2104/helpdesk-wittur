@@ -8,22 +8,32 @@ use Illuminate\Support\Facades\DB;
 
 class ReporteSeguridadController
 {
-    /**
-     * GET: Obtener reportes con paginación y filtros
-     */
     public function index(Request $request)
     {
         try {
             $sortBy = $request->query('sort_by', 'date_created');
             $sortOrder = strtolower($request->query('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+            $search = $request->query('search', '');
             
             $allowedSorts = ['id', 'date_created', 'fecha_incidente', 'tipo_incidente', 'estatus'];
             if (!in_array($sortBy, $allowedSorts)) {
                 $sortBy = 'date_created';
             }
 
-            // Traemos los reportes con la info de la cámara y el guardia que reportó
-            $query = ReporteSeguridad::with(['camara', 'guardia']);
+            // Restauramos el filtro de borrado lógico
+            $query = ReporteSeguridad::with(['camara', 'guardia'])->where('status', 1);
+
+            // Búsqueda global incluyendo el ID del reporte
+            if (!empty($search)) {
+                $query->where(function($q) use ($search) {
+                    $q->where('id', 'LIKE', "%{$search}%")
+                      ->orWhere('tipo_incidente', 'LIKE', "%{$search}%")
+                      ->orWhere('descripcion', 'LIKE', "%{$search}%")
+                      ->orWhereHas('guardia', function($qGuardia) use ($search) {
+                          $qGuardia->where('nombre_completo', 'LIKE', "%{$search}%");
+                      });
+                });
+            }
 
             $reportes = $query->orderBy($sortBy, $sortOrder)->paginate(10);
             
@@ -42,9 +52,6 @@ class ReporteSeguridadController
         }
     }
 
-    /**
-     * POST: Crear un nuevo reporte desde la caseta
-     */
     public function store(Request $request)
     {
         $request->validate([
@@ -61,7 +68,8 @@ class ReporteSeguridadController
                 'fecha_incidente' => $request->fecha_incidente,
                 'tipo_incidente' => $request->tipo_incidente,
                 'descripcion' => $request->descripcion,
-                'estatus' => 'Pendiente'
+                'estatus' => 'Pendiente',
+                'status' => 1 // Asegura que nazca activo
             ]);
 
             return response()->json(['success' => true, 'data' => $reporte, 'message' => 'Reporte creado exitosamente.'], 201);
@@ -70,9 +78,6 @@ class ReporteSeguridadController
         }
     }
 
-    /**
-     * PUT/PATCH: Actualizar estatus del reporte (Para el Administrador)
-     */
     public function update(Request $request, $id)
     {
         $reporte = ReporteSeguridad::find($id);
@@ -82,21 +87,15 @@ class ReporteSeguridadController
         }
 
         try {
-            // Si mandan estatus (solo lo hará el Admin desde el frontend)
             if ($request->has('estatus')) {
                 $reporte->estatus = $request->estatus;
             }
-
-            // Si mandan edición de textos (lo hará el Guardia o Admin desde el modal)
             if ($request->has('tipo_incidente')) {
                 $reporte->tipo_incidente = $request->tipo_incidente;
             }
             if ($request->has('descripcion')) {
                 $reporte->descripcion = $request->descripcion;
             }
-
-            // Si tienes campo de auditoría para saber quién editó, descomenta la siguiente línea:
-            // $reporte->user_edit_id = auth()->id();
 
             $reporte->save();
 
@@ -106,9 +105,6 @@ class ReporteSeguridadController
         }
     }
 
-    /**
-     * DELETE: Borrado lógico del reporte (Soft Delete)
-     */
     public function destroy($id)
     {
         try {
@@ -118,12 +114,8 @@ class ReporteSeguridadController
                 return response()->json(['success' => false, 'message' => 'Reporte no encontrado'], 404);
             }
 
-            // Realizamos el borrado lógico cambiando el status a 0
+            // Restauramos el borrado lógico
             $reporte->status = 0; 
-            
-            // Si tienes campo de auditoría para saber quién lo borró, descomenta:
-            // $reporte->user_edit_id = auth()->id();
-            
             $reporte->save();
 
             return response()->json([
