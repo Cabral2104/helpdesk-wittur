@@ -11,6 +11,7 @@ use App\Http\Controllers\TicketController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ReporteSeguridadController;
 use App\Http\Controllers\ReporteController;
+use App\Http\Controllers\NotificacionController;
 
 // ==========================================
 // RUTAS PÚBLICAS (No requieren Token)
@@ -49,4 +50,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/categorias-incidencias', [TicketController::class, 'getCategorias']);
     Route::get('/exportar', [ReporteController::class, 'exportar']);
     Route::delete('/reportes-seguridad/{id}', [ReporteSeguridadController::class, 'destroy']);
+    Route::get('/notificaciones', [NotificacionController::class, 'index']);
 });
