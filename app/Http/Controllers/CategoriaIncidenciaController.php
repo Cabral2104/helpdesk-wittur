@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use App\Models\CategoriaIncidencia;
 
 class CategoriaIncidenciaController
@@ -11,7 +12,9 @@ class CategoriaIncidenciaController
     public function index()
     {
         try {
-            $categorias = CategoriaIncidencia::all();
+            $categorias = Cache::remember('catalogo_categorias_completo', 86400, function () {
+                return CategoriaIncidencia::all();
+            });
             
             return response()->json([
                 'success' => true,
@@ -43,6 +46,9 @@ class CategoriaIncidenciaController
                 'sla_horas' => $request->sla_horas,
                 'user_create_id' => auth()->id() // Utilizamos el ID del usuario autenticado 
             ]);
+
+            Cache::forget('catalogo_categorias_completo');
+            Cache::forget('categorias_incidencias_activas');
 
             // 3. Responder a React
             return response()->json([

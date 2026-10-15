@@ -30,13 +30,15 @@ class DashboardController
             if ($isSeguridad) {
                 $querySeguridad = ReporteSeguridad::query();
 
-                $activos = (clone $querySeguridad)->whereIn('estatus', ['Pendiente', 'En_Revision'])->count();
-                $resueltos = (clone $querySeguridad)->where('estatus', 'Resuelto')->count();
-                
+                // 1 sola consulta agrupada para todos los estatus
                 $porEstatus = (clone $querySeguridad)
                     ->selectRaw('estatus, COUNT(*) as total')
                     ->groupBy('estatus')
                     ->get();
+
+                // Calculamos en memoria sin volver a consultar MySQL
+                $activos = (int) $porEstatus->whereIn('estatus', ['Pendiente', 'En_Revision'])->sum('total');
+                $resueltos = (int) $porEstatus->where('estatus', 'Resuelto')->sum('total');
 
                 $fechaInicio = Carbon::now()->subDays(7)->startOfDay();
                 $porDia = (clone $querySeguridad)
@@ -56,13 +58,15 @@ class DashboardController
                     $query->where('usuario_reporta_id', $user->id);
                 }
 
-                $activos = (clone $query)->whereIn('estatus', ['Abierto', 'En_Progreso', 'Esperando_Piezas'])->count();
-                $resueltos = (clone $query)->whereIn('estatus', ['Resuelto', 'Cerrado'])->count();
-                
+                // 1 sola consulta agrupada para todos los estatus
                 $porEstatus = (clone $query)
                     ->selectRaw('estatus, COUNT(*) as total')
                     ->groupBy('estatus')
                     ->get();
+
+                // Calculamos en memoria sin consultas extra
+                $activos = (int) $porEstatus->whereIn('estatus', ['Abierto', 'En_Progreso', 'Esperando_Piezas'])->sum('total');
+                $resueltos = (int) $porEstatus->whereIn('estatus', ['Resuelto', 'Cerrado'])->sum('total');
 
                 $fechaInicio = Carbon::now()->subDays(7)->startOfDay();
                 $porDia = (clone $query)
@@ -74,10 +78,15 @@ class DashboardController
             }
 
             // ==========================================
-            // 3. Métricas de CCTV (Solo Admin)
+            // 3. Métricas de CCTV (Solo Admin) - 1 sola consulta
             // ==========================================
-            $camarasOffline = $isAdmin ? CamaraCctv::where('estatus_red', 0)->count() : 0;
-            $totalCamaras = $isAdmin ? CamaraCctv::count() : 0;
+            $camarasOffline = 0;
+            $totalCamaras = 0;
+            if ($isAdmin) {
+                $cctvStats = CamaraCctv::selectRaw('COUNT(*) as total, SUM(CASE WHEN estatus_red = 0 THEN 1 ELSE 0 END) as offline')->first();
+                $totalCamaras = (int) ($cctvStats->total ?? 0);
+                $camarasOffline = (int) ($cctvStats->offline ?? 0);
+            }
 
             // Retornamos el mismo formato exacto que ya tenías
             return response()->json([

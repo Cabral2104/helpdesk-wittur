@@ -35,7 +35,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // --- 1. RUTAS ESPECÍFICAS (Deben ir primero) ---
     Route::get('/dashboard/metricas', [DashboardController::class, 'index']);
-    Route::get('/cctv/caseta', [CamaraCctvController::class, 'camarasCaseta']); // <- ¡Movida arriba!
+    Route::get('/cctv/caseta', [CamaraCctvController::class, 'camarasCaseta']);
+    Route::get('/cctv/catalogo', [CamaraCctvController::class, 'catalogo']);
 
     // --- 2. RUTAS DE RECURSOS (Dinámicas, deben ir después) ---
     Route::apiResource('departamentos', DepartamentoController::class);

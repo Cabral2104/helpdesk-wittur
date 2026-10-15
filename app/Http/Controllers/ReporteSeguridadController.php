@@ -20,8 +20,14 @@ class ReporteSeguridadController
                 $sortBy = 'date_created';
             }
 
-            // Restauramos el filtro de borrado lógico
-            $query = ReporteSeguridad::with(['camara', 'guardia'])->where('status', 1);
+            // Proyectar solo columnas requeridas para el listado y sus relaciones
+            $query = ReporteSeguridad::select([
+                'id', 'camara_id', 'usuario_reporta_id', 'fecha_incidente',
+                'tipo_incidente', 'descripcion', 'estatus', 'date_created'
+            ])->with([
+                'camara:id,nombre_camara,ubicacion',
+                'guardia:id,nombre_completo'
+            ])->where('status', 1);
 
             // Búsqueda global incluyendo el ID del reporte
             if (!empty($search)) {

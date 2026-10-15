@@ -25,25 +25,44 @@ class ReporteController
 
             $datos = [];
             
-            $mapUsuarios = Usuario::pluck('nombre_completo', 'id')->toArray();
-            $mapDeptos = DB::table('departamentos')->pluck('nombre', 'id')->toArray();
+            // Cargar mapeos solo si el módulo los requiere
+            $mapUsuarios = [];
+            $mapDeptos = [];
+            if (in_array($modulo, ['seguridad', 'tickets', 'usuarios', 'todos'])) {
+                $mapUsuarios = Usuario::pluck('nombre_completo', 'id')->toArray();
+            }
+            if (in_array($modulo, ['usuarios', 'todos'])) {
+                $mapDeptos = DB::table('departamentos')->pluck('nombre', 'id')->toArray();
+            }
 
             if ($modulo === 'seguridad' || $modulo === 'todos') {
-                $datos['seguridad'] = ReporteSeguridad::with(['camara'])
+                $datos['seguridad'] = ReporteSeguridad::with(['camara:id,nombre_camara,ubicacion'])
+                    ->select(['id', 'camara_id', 'usuario_reporta_id', 'fecha_incidente', 'tipo_incidente', 'estatus', 'descripcion', 'date_created'])
                     ->whereBetween('date_created', [$inicio, $fin])
+                    ->limit(1000)
                     ->get();
             }
             if ($modulo === 'tickets' || $modulo === 'todos') {
-                $datos['tickets'] = Ticket::whereBetween('date_created', [$inicio, $fin])->get();
+                $datos['tickets'] = Ticket::select(['id', 'folio', 'usuario_reporta_id', 'descripcion_falla', 'prioridad', 'estatus', 'date_created'])
+                    ->whereBetween('date_created', [$inicio, $fin])
+                    ->limit(1000)
+                    ->get();
             }
             if ($modulo === 'cctv' || $modulo === 'todos') {
-                $datos['cctv'] = CamaraCctv::all(); 
+                $datos['cctv'] = CamaraCctv::select(['id', 'ip_asignada', 'nombre_camara', 'ubicacion', 'numero_serie', 'estatus_red'])
+                    ->where('status', 1)
+                    ->get(); 
             }
             if ($modulo === 'usuarios' || $modulo === 'todos') {
-                $datos['usuarios'] = Usuario::all(); 
+                $datos['usuarios'] = Usuario::select(['id', 'numero_nomina', 'nombre_completo', 'rol', 'departamento_id'])
+                    ->where('status', 1)
+                    ->get(); 
             }
             if ($modulo === 'inventario' || $modulo === 'todos') {
-                $datos['inventario'] = DB::table('equipos_inventario')->get(); 
+                $datos['inventario'] = DB::table('equipos_inventario')
+                    ->select(['id', 'codigo_qr', 'nombre_red', 'tipo_dispositivo', 'marca_modelo', 'numero_serie', 'ubicacion', 'usuario_asignado', 'sistema_operativo'])
+                    ->where('status', 1)
+                    ->get(); 
             }
 
             if ($formato === 'json') {
