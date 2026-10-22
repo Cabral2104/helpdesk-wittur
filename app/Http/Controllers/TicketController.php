@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use App\Models\Ticket;
 use App\Models\TicketHistorial;
 
@@ -28,10 +29,22 @@ class TicketController
             }
             $sortOrder = strtolower($sortOrder) === 'asc' ? 'asc' : 'desc';
 
-            $query = Ticket::with([
-                'usuarioReporta', 'equipo', 'categoria', 'tecnicoAsignado',
+            // Proyectar solo las columnas necesarias para el listado y evitar relaciones innecesarias
+            $query = Ticket::select([
+                'id',
+                'folio',
+                'usuario_reporta_id',
+                'categoria_id',
+                'prioridad',
+                'estatus',
+                'descripcion_falla',
+                'date_created'
+            ])->with([
+                'usuarioReporta:id,nombre_completo,numero_nomina',
+                'categoria:id,nombre',
                 'historial' => function($q) {
-                    $q->orderBy('date_created', 'desc');
+                    $q->select('id', 'ticket_id', 'comentario_cambio', 'date_created')
+                      ->orderBy('date_created', 'desc');
                 }
             ]);
 
@@ -134,11 +147,16 @@ class TicketController
     public function show(string $id)
     {
         try {
-            $ticket = Ticket::with(['usuarioReporta', 'equipo', 'categoria', 'tecnicoAsignado'])
-                            ->with(['historial' => function($query) {
-                                $query->orderBy('date_created', 'desc');
-                            }])
-                            ->find($id);
+            $ticket = Ticket::with([
+                'usuarioReporta:id,nombre_completo,numero_nomina',
+                'equipo:id,etiqueta,marca_modelo,nombre_red',
+                'categoria:id,nombre',
+                'tecnicoAsignado:id,nombre_completo',
+                'historial' => function($query) {
+                    $query->select('id', 'ticket_id', 'estatus_anterior', 'estatus_nuevo', 'comentario_cambio', 'date_created')
+                          ->orderBy('date_created', 'desc');
+                }
+            ])->find($id);
 
             if (!$ticket) {
                 return response()->json([
@@ -258,10 +276,12 @@ class TicketController
     public function getCategorias()
     {
         try {
-            $categorias = \Illuminate\Support\Facades\DB::table('categorias_incidencias')
-                ->where('status', 1)
-                ->select('id', 'nombre')
-                ->get();
+            $categorias = Cache::remember('categorias_incidencias_activas', 86400, function () {
+                return DB::table('categorias_incidencias')
+                    ->where('status', 1)
+                    ->select('id', 'nombre')
+                    ->get();
+            });
                 
             return response()->json([
                 'success' => true,

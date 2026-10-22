@@ -11,6 +11,7 @@ use App\Http\Controllers\TicketController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ReporteSeguridadController;
 use App\Http\Controllers\ReporteController;
+use App\Http\Controllers\NotificacionController;
 
 // ==========================================
 // RUTAS PÚBLICAS (No requieren Token)
@@ -34,7 +35,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // --- 1. RUTAS ESPECÍFICAS (Deben ir primero) ---
     Route::get('/dashboard/metricas', [DashboardController::class, 'index']);
-    Route::get('/cctv/caseta', [CamaraCctvController::class, 'camarasCaseta']); // <- ¡Movida arriba!
+    Route::get('/cctv/caseta', [CamaraCctvController::class, 'camarasCaseta']);
+    Route::get('/cctv/catalogo', [CamaraCctvController::class, 'catalogo']);
 
     // --- 2. RUTAS DE RECURSOS (Dinámicas, deben ir después) ---
     Route::apiResource('departamentos', DepartamentoController::class);
@@ -49,4 +51,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/categorias-incidencias', [TicketController::class, 'getCategorias']);
     Route::get('/exportar', [ReporteController::class, 'exportar']);
     Route::delete('/reportes-seguridad/{id}', [ReporteSeguridadController::class, 'destroy']);
+    Route::get('/notificaciones', [NotificacionController::class, 'index']);
 });

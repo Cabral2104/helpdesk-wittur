@@ -90,6 +90,7 @@
             <thead>
                 <tr>
                     <th class="col-sm">ID</th>
+                    <th class="col-md">Fecha Alta</th>
                     <th class="col-md">Nombre en Red</th>
                     <th class="col-sm">Tipo</th>
                     <th class="col-lg">Marca / Modelo</th>
@@ -101,6 +102,7 @@
                 @forelse($datos['inventario'] as $eq)
                     <tr>
                         <td>{{ $eq->id }}</td>
+                        <td>{{ $eq->date_created }}</td>
                         <td>{{ $eq->nombre_red ?? 'N/D' }}</td>
                         <td>{{ $eq->tipo_dispositivo ?? 'N/D' }}</td>
                         <td>{{ $eq->marca_modelo ?? 'N/D' }}</td>
@@ -108,7 +110,7 @@
                         <td>{{ $eq->usuario_asignado ?? 'N/D' }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" style="text-align:center;">No hay equipos en el inventario.</td></tr>
+                    <tr><td colspan="7" style="text-align:center;">No hay equipos registrados en este periodo.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -120,6 +122,7 @@
             <thead>
                 <tr>
                     <th class="col-sm">ID</th>
+                    <th class="col-md">Fecha Registro</th>
                     <th class="col-md">Dirección IP</th>
                     <th class="col-md">Nombre</th>
                     <th class="col-md">Número de Serie (N/S)</th>
@@ -131,6 +134,7 @@
                 @forelse($datos['cctv'] as $cam)
                     <tr>
                         <td>{{ $cam->id }}</td>
+                        <td>{{ $cam->date_created }}</td>
                         <td>{{ $cam->ip_asignada }}</td>
                         <td>{{ $cam->nombre_camara }}</td>
                         <td>{{ $cam->numero_serie ?? 'N/D' }}</td>
@@ -138,7 +142,7 @@
                         <td>{{ $cam->estatus_red ? 'Online' : 'Offline' }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" style="text-align:center;">No hay cámaras registradas.</td></tr>
+                    <tr><td colspan="7" style="text-align:center;">No hay cámaras registradas en este periodo.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -149,6 +153,7 @@
         <table>
             <thead>
                 <tr>
+                    <th class="col-md">Fecha Alta</th>
                     <th class="col-md">Número de Nómina</th>
                     <th class="col-lg">Nombre Completo</th>
                     <th class="col-md">Rol (Acceso)</th>
@@ -158,13 +163,14 @@
             <tbody>
                 @forelse($datos['usuarios'] as $usr)
                     <tr>
+                        <td>{{ $usr->date_created }}</td>
                         <td>{{ $usr->numero_nomina ?? 'N/D' }}</td>
                         <td>{{ $usr->nombre_completo }}</td>
                         <td>{{ $usr->rol }}</td>
                         <td>{{ $mapDeptos[$usr->departamento_id] ?? 'Desconocido' }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="4" style="text-align:center;">No hay usuarios registrados.</td></tr>
+                    <tr><td colspan="5" style="text-align:center;">No hay usuarios registrados en este periodo.</td></tr>
                 @endforelse
             </tbody>
         </table>

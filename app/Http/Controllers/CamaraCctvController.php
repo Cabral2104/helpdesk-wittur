@@ -164,9 +164,10 @@ class CamaraCctvController
     public function camarasCaseta()
     {
         try {
-            // Solo trae las que tienen visible_en_caseta = 1 y están activas (status = 1)
+            // Solo trae las que tienen visible_en_caseta = 1 y están activas (status = 1) con columnas requeridas
             $camaras = CamaraCctv::where('visible_en_caseta', 1)
                                  ->where('status', 1)
+                                 ->select(['id', 'nombre_camara', 'ubicacion', 'stream_url', 'estatus_red'])
                                  ->orderBy('nombre_camara', 'asc')
                                  ->get();
             
@@ -179,6 +180,35 @@ class CamaraCctvController
                 'success' => false,
                 'message' => 'Error al obtener cámaras de caseta: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * GET: Catálogo ligero de cámaras para selectores (dropdowns)
+     * Soporta filtro ?solo_caseta=1 y auto-filtra si el rol es Seguridad
+     */
+    public function catalogo(Request $request)
+    {
+        try {
+            $user = auth()->user();
+            $soloCaseta = $request->boolean('solo_caseta') || ($user && $user->rol === 'Seguridad');
+
+            $query = CamaraCctv::where('status', 1);
+
+            if ($soloCaseta) {
+                $query->where('visible_en_caseta', 1);
+            }
+
+            $camaras = $query->select(['id', 'nombre_camara', 'ubicacion'])
+                             ->orderBy('nombre_camara', 'asc')
+                             ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $camaras
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 }

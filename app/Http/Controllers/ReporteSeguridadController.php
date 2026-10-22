@@ -20,8 +20,14 @@ class ReporteSeguridadController
                 $sortBy = 'date_created';
             }
 
-            // Restauramos el filtro de borrado lógico
-            $query = ReporteSeguridad::with(['camara', 'guardia'])->where('status', 1);
+            // Proyectar solo columnas requeridas para el listado y sus relaciones
+            $query = ReporteSeguridad::select([
+                'id', 'camara_id', 'usuario_reporta_id', 'fecha_incidente',
+                'tipo_incidente', 'descripcion', 'estatus', 'date_created'
+            ])->with([
+                'camara:id,nombre_camara,ubicacion',
+                'guardia:id,nombre_completo'
+            ])->where('status', 1);
 
             // Búsqueda global incluyendo el ID del reporte
             if (!empty($search)) {
@@ -86,15 +92,46 @@ class ReporteSeguridadController
             return response()->json(['success' => false, 'message' => 'Reporte no encontrado'], 404);
         }
 
+        $user = auth()->user();
+        $isCreator = (int)$reporte->usuario_reporta_id === (int)$user->id;
+        $isAdmin = $user->rol === 'Administrador';
+
+        // Si se intenta modificar el contenido testimonial (tipo, descripción, cámara, fecha):
+        // Únicamente el usuario creador del reporte tiene autorización legal/operativa.
+        if ($request->has('tipo_incidente') || $request->has('descripcion') || $request->has('camara_id') || $request->has('fecha_incidente')) {
+            if (!$isCreator) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Acceso denegado: Únicamente el usuario u oficial que redactó este reporte tiene autorización para modificar su contenido.'
+                ], 403);
+            }
+        }
+
         try {
+            // El estatus sí lo puede actualizar el Administrador o el creador
             if ($request->has('estatus')) {
+                if (!$isAdmin && !$isCreator) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No tienes permiso para cambiar el estatus de este reporte.'
+                    ], 403);
+                }
                 $reporte->estatus = $request->estatus;
             }
-            if ($request->has('tipo_incidente')) {
-                $reporte->tipo_incidente = $request->tipo_incidente;
-            }
-            if ($request->has('descripcion')) {
-                $reporte->descripcion = $request->descripcion;
+
+            if ($isCreator) {
+                if ($request->has('tipo_incidente')) {
+                    $reporte->tipo_incidente = $request->tipo_incidente;
+                }
+                if ($request->has('descripcion')) {
+                    $reporte->descripcion = $request->descripcion;
+                }
+                if ($request->has('camara_id')) {
+                    $reporte->camara_id = $request->camara_id;
+                }
+                if ($request->has('fecha_incidente')) {
+                    $reporte->fecha_incidente = $request->fecha_incidente;
+                }
             }
 
             $reporte->save();
@@ -114,7 +151,18 @@ class ReporteSeguridadController
                 return response()->json(['success' => false, 'message' => 'Reporte no encontrado'], 404);
             }
 
-            // Restauramos el borrado lógico
+            $user = auth()->user();
+            $isAdmin = $user->rol === 'Administrador';
+            $isCreator = (int)$reporte->usuario_reporta_id === (int)$user->id;
+
+            if (!$isAdmin && !$isCreator) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes permiso para dar de baja este reporte.'
+                ], 403);
+            }
+
+            // Borrado lógico oficial
             $reporte->status = 0; 
             $reporte->save();
 

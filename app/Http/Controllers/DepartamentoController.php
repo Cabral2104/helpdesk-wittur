@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use App\Models\Departamento;
 
 class DepartamentoController
@@ -10,7 +11,9 @@ class DepartamentoController
     public function index()
     {
         try {
-            $departamentos = Departamento::all();
+            $departamentos = Cache::remember('catalogo_departamentos', 86400, function () {
+                return Departamento::where('status', 1)->get();
+            });
             return response()->json(['success' => true, 'data' => $departamentos], 200);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
@@ -29,6 +32,7 @@ class DepartamentoController
                 'user_create_id' => auth()->id()
             ]);
 
+            Cache::forget('catalogo_departamentos');
             return response()->json(['success' => true, 'data' => $departamento, 'message' => 'Departamento creado exitosamente'], 201);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Error al crear departamento: ' . $e->getMessage()], 500);
@@ -63,6 +67,7 @@ class DepartamentoController
             $departamento->user_edit_id = auth()->id();
             $departamento->save();
 
+            Cache::forget('catalogo_departamentos');
             return response()->json(['success' => true, 'data' => $departamento, 'message' => 'Departamento actualizado'], 200);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
@@ -82,6 +87,7 @@ class DepartamentoController
             $departamento->user_edit_id = auth()->id();
             $departamento->save();
 
+            Cache::forget('catalogo_departamentos');
             return response()->json(['success' => true, 'message' => 'Departamento eliminado correctamente'], 200);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);

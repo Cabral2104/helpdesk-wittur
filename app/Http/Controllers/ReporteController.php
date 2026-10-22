@@ -25,25 +25,47 @@ class ReporteController
 
             $datos = [];
             
-            $mapUsuarios = Usuario::pluck('nombre_completo', 'id')->toArray();
-            $mapDeptos = DB::table('departamentos')->pluck('nombre', 'id')->toArray();
+            // Cargar mapeos solo si el módulo los requiere
+            $mapUsuarios = [];
+            $mapDeptos = [];
+            if (in_array($modulo, ['seguridad', 'tickets', 'usuarios', 'todos'])) {
+                $mapUsuarios = Usuario::pluck('nombre_completo', 'id')->toArray();
+            }
+            if (in_array($modulo, ['usuarios', 'todos'])) {
+                $mapDeptos = DB::table('departamentos')->pluck('nombre', 'id')->toArray();
+            }
 
             if ($modulo === 'seguridad' || $modulo === 'todos') {
-                $datos['seguridad'] = ReporteSeguridad::with(['camara'])
+                $datos['seguridad'] = ReporteSeguridad::with(['camara:id,nombre_camara,ubicacion'])
+                    ->select(['id', 'camara_id', 'usuario_reporta_id', 'fecha_incidente', 'tipo_incidente', 'estatus', 'descripcion', 'date_created'])
                     ->whereBetween('date_created', [$inicio, $fin])
+                    ->limit(1000)
                     ->get();
             }
             if ($modulo === 'tickets' || $modulo === 'todos') {
-                $datos['tickets'] = Ticket::whereBetween('date_created', [$inicio, $fin])->get();
+                $datos['tickets'] = Ticket::select(['id', 'folio', 'usuario_reporta_id', 'descripcion_falla', 'prioridad', 'estatus', 'date_created'])
+                    ->whereBetween('date_created', [$inicio, $fin])
+                    ->limit(1000)
+                    ->get();
             }
             if ($modulo === 'cctv' || $modulo === 'todos') {
-                $datos['cctv'] = CamaraCctv::all(); 
+                $datos['cctv'] = CamaraCctv::select(['id', 'ip_asignada', 'nombre_camara', 'ubicacion', 'numero_serie', 'estatus_red', 'date_created'])
+                    ->where('status', 1)
+                    ->whereBetween('date_created', [$inicio, $fin])
+                    ->get(); 
             }
             if ($modulo === 'usuarios' || $modulo === 'todos') {
-                $datos['usuarios'] = Usuario::all(); 
+                $datos['usuarios'] = Usuario::select(['id', 'numero_nomina', 'nombre_completo', 'rol', 'departamento_id', 'date_created'])
+                    ->where('status', 1)
+                    ->whereBetween('date_created', [$inicio, $fin])
+                    ->get(); 
             }
             if ($modulo === 'inventario' || $modulo === 'todos') {
-                $datos['inventario'] = DB::table('equipos_inventario')->get(); 
+                $datos['inventario'] = DB::table('equipos_inventario')
+                    ->select(['id', 'codigo_qr', 'nombre_red', 'tipo_dispositivo', 'marca_modelo', 'numero_serie', 'ubicacion', 'usuario_asignado', 'sistema_operativo', 'date_created'])
+                    ->where('status', 1)
+                    ->whereBetween('date_created', [$inicio, $fin])
+                    ->get(); 
             }
 
             if ($formato === 'json') {
@@ -109,24 +131,22 @@ class ReporteController
             
             if (isset($datos['cctv'])) {
                 fputcsv($file, ['--- PADRON DE CAMARAS CCTV ---']);
-                fputcsv($file, ['ID', 'Direccion IP', 'Nombre', 'Ubicacion', 'Numero de Serie', 'Estatus Red']);
+                fputcsv($file, ['ID', 'Fecha Registro', 'Direccion IP', 'Nombre', 'Ubicacion', 'Numero de Serie', 'Estatus Red']);
                 foreach ($datos['cctv'] as $row) {
-                    // El "\t" fuerza a Excel a tratar el N/S como texto
                     $numeroSerieCctv = $row->numero_serie ? "\t" . $row->numero_serie : 'N/D';
-                    fputcsv($file, [$row->id, $row->ip_asignada, $row->nombre_camara, $row->ubicacion, $numeroSerieCctv, $row->estatus_red ? 'Online' : 'Offline']);
+                    fputcsv($file, [$row->id, $row->date_created, $row->ip_asignada, $row->nombre_camara, $row->ubicacion, $numeroSerieCctv, $row->estatus_red ? 'Online' : 'Offline']);
                 }
                 fputcsv($file, []);
             }
 
             if (isset($datos['inventario'])) {
                 fputcsv($file, ['--- INVENTARIO DE EQUIPOS ---']);
-                fputcsv($file, ['ID', 'Codigo QR', 'Nombre en Red', 'Tipo', 'Marca/Modelo', 'Numero de Serie', 'Ubicacion', 'Usuario Asignado', 'Sistema Operativo']);
+                fputcsv($file, ['ID', 'Fecha Alta', 'Codigo QR', 'Nombre en Red', 'Tipo', 'Marca/Modelo', 'Numero de Serie', 'Ubicacion', 'Usuario Asignado', 'Sistema Operativo']);
                 foreach ($datos['inventario'] as $row) {
-                    // Mismo truco para el inventario de TI
                     $numeroSerieInv = $row->numero_serie ? "\t" . $row->numero_serie : 'N/D';
-                    
                     fputcsv($file, [
                         $row->id, 
+                        $row->date_created,
                         $row->codigo_qr,
                         $row->nombre_red ?? 'N/D', 
                         $row->tipo_dispositivo ?? 'N/D', 
@@ -142,11 +162,10 @@ class ReporteController
 
             if (isset($datos['usuarios'])) {
                 fputcsv($file, ['--- USUARIOS DEL SISTEMA ---']);
-                fputcsv($file, ['Numero Nomina', 'Nombre Completo', 'Rol', 'Departamento']);
+                fputcsv($file, ['Numero Nomina', 'Fecha Alta', 'Nombre Completo', 'Rol', 'Departamento']);
                 foreach ($datos['usuarios'] as $row) {
                     $deptoStr = $mapDeptos[$row->departamento_id] ?? 'Desconocido';
-                    // CORREGIDO: numero_nomina
-                    fputcsv($file, [$row->numero_nomina ?? 'N/D', $row->nombre_completo, $row->rol, $deptoStr]);
+                    fputcsv($file, [$row->numero_nomina ?? 'N/D', $row->date_created, $row->nombre_completo, $row->rol, $deptoStr]);
                 }
             }
             fclose($file);

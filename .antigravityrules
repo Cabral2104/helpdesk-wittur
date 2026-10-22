@@ -1,0 +1,5 @@
+# Entorno del proyecto
+- Backend: Laravel en PHP (servido vía XAMPP en localhost:8000 o Apache)
+- Frontend: React + Tailwind CSS (Vite / npm)
+- Base de datos: MySQL local vía XAMPP (puerto 3306)
+- Regla: No modificar credenciales .env ni ejecutar migraciones destructivas (fresh/rollback) sin confirmación explícita.
